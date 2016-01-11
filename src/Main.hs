@@ -6,6 +6,7 @@ import Control.Concurrent (threadDelay)
 import Control.Monad
 import Control.Monad.RWS (gets)
 import Control.Monad.Trans (liftIO)
+import DBus
 import DBus.Mpris
 import Data.Default
 import Data.Monoid ((<>))
@@ -25,6 +26,23 @@ myPlaybackStatusHook = do
     when (s == Playing) $
       liftIO $ hPutStrLn stderr $ "Current bus is now " ++ show bus
 
+stopCurrentOnPlaybackStatusChange :: Callback PlaybackStatus
+stopCurrentOnPlaybackStatusChange = do
+  b <- bus
+  whenJustM value $ \v -> liftMpris $ do
+    pl <- gets players
+    whenJustM current $ \c ->
+      when (v == Playing && notElem b pl) $ do
+        liftIO $ print $ "old current was " ++ show c
+        forkMpris $ fade c >> pause c
+
+fade :: BusName -> Mpris ()
+fade bus = whenJustM (volume bus) $ \cv -> do
+  let vol = (takeWhile (>= 0) . iterate (flip (-) 0.03) $ cv) ++ [0]
+  forM_ vol $ \v -> do
+    setVolume bus v
+    liftIO $ threadDelay 100000
+
 loop :: Mpris ()
 loop = do
   c <- current
@@ -39,7 +57,9 @@ loop = do
 main :: IO ()
 main = do
   let config = def {
-        playbackStatusHook = playbackStatusHook def <> myPlaybackStatusHook
+        playbackStatusHook = stopCurrentOnPlaybackStatusChange
+                             <> playbackStatusHook def
+                             <> myPlaybackStatusHook
         }
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
