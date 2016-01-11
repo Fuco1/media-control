@@ -22,6 +22,7 @@ executable media-control
   -- other-modules:
   build-depends:
     base                    ==4.6.*,
+    dbus                    >= 0.10,
     mtl                     >= 2.1.2,
     mpris                   >= 0.1.0.0,
     text                    >= 0.11.3.1,
