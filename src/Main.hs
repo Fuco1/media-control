@@ -4,6 +4,7 @@ module Main (main) where
 
 import Control.Concurrent (threadDelay)
 import Control.Monad
+import Control.Monad.RWS (gets)
 import Control.Monad.Trans (liftIO)
 import DBus.Mpris
 import Data.Default
@@ -42,4 +43,7 @@ main = do
         }
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
-  mpris config $ forever loop
+  mpris config $ do
+    names <- gets players
+    liftIO $ print names
+    forever loop
