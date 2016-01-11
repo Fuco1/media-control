@@ -14,11 +14,13 @@ import Format (formatMetadata)
 whenJust :: Monad m => Maybe a -> (a -> m ()) -> m ()
 whenJust a f = maybe (return ()) f a
 
+whenJustM :: Monad m => m (Maybe a) -> (a -> m ()) -> m ()
+whenJustM a f = a >>= \v -> whenJust v f
+
 myPlaybackStatusHook :: Callback PlaybackStatus
 myPlaybackStatusHook = do
   bus <- bus
-  value <- value
-  whenJust value $ \s ->
+  whenJustM value $ \s ->
     when (s == Playing) $
       liftIO $ hPutStrLn stderr $ "Current bus is now " ++ show bus
 
