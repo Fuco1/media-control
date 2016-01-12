@@ -2,6 +2,7 @@
 
 module Main (main) where
 
+import Control.Applicative
 import Control.Concurrent (threadDelay)
 import Control.Monad
 import Control.Monad.RWS (gets)
@@ -9,9 +10,19 @@ import Control.Monad.Trans (liftIO)
 import DBus
 import DBus.Mpris
 import Data.Default
+import Data.IORef
+import Data.Map as M
 import Data.Monoid ((<>))
 import System.IO
 import Format (formatMetadata)
+
+data Player = Player { previousStatus :: PlaybackStatus
+                     , previousVolume :: Double } deriving Show
+
+setPreviousVolume :: Player -> Double -> Player
+setPreviousVolume p v = p { previousVolume = v }
+
+type PlayerData = Map BusName Player
 
 whenJust :: Monad m => Maybe a -> (a -> m ()) -> m ()
 whenJust a f = maybe (return ()) f a
@@ -19,32 +30,49 @@ whenJust a f = maybe (return ()) f a
 whenJustM :: Monad m => m (Maybe a) -> (a -> m ()) -> m ()
 whenJustM a f = a >>= \v -> whenJust v f
 
-myPlaybackStatusHook :: Callback PlaybackStatus
-myPlaybackStatusHook = do
+myPlaybackStatusHook :: IORef PlayerData -> Callback PlaybackStatus
+myPlaybackStatusHook playerdata = do
   bus <- bus
   whenJustM value $ \s ->
     when (s == Playing) $
       liftIO $ hPutStrLn stderr $ "Current bus is now " ++ show bus
 
-stopCurrentOnPlaybackStatusChange :: Callback PlaybackStatus
-stopCurrentOnPlaybackStatusChange = do
+stopCurrentOnPlaybackStatusChange :: IORef PlayerData -> Callback PlaybackStatus
+stopCurrentOnPlaybackStatusChange playerdata = do
   b <- bus
-  whenJustM value $ \v -> liftMpris $ do
+  whenJustM value $ \bstatus -> liftMpris $ do
     pl <- gets players
     whenJustM current $ \c ->
-      when (v == Playing && notElem b pl) $ do
+      when (bstatus == Playing && notElem b pl) $ do
         liftIO $ print $ "old current was " ++ show c
-        forkMpris $ fade c >> pause c
+        whenJustM (volume c) $ \vol ->
+          whenJustM (playbackStatus c) $ \cstatus -> do
+            liftIO $ do
+              players <- readIORef playerdata
+              let p = Player { previousVolume = vol, previousStatus = cstatus }
+              let newp = insert c p players
+              writeIORef playerdata newp
+              hPutStrLn stderr $ "stats: " ++ show newp
+            when (cstatus == Playing) $ forkMpris $ do
+              -- fade c
+              pause c
 
 fade :: BusName -> Mpris ()
 fade bus = whenJustM (volume bus) $ \cv -> do
-  let vol = (takeWhile (>= 0) . iterate (flip (-) 0.03) $ cv) ++ [0]
+  let vol = (takeWhile (>= 0) . iterate (flip (-) 0.05) $ cv) ++ [0]
   forM_ vol $ \v -> do
     setVolume bus v
-    liftIO $ threadDelay 100000
+    liftIO $ threadDelay 80000
 
-loop :: Mpris ()
-loop = do
+unfade :: BusName -> Double -> Mpris ()
+unfade bus target = whenJustM (volume bus) $ \cv -> do
+  let vol = (takeWhile (<= target) . iterate ((+) 0.05) $ 0) ++ [target]
+  forM_ vol $ \v -> do
+    setVolume bus v
+    liftIO $ threadDelay 80000
+
+loop :: IORef PlayerData -> Mpris ()
+loop playerdata = do
   c <- current
   whenJust c $ \cur -> do
     meta <- metadata cur
@@ -53,17 +81,24 @@ loop = do
     liftIO $ do
       threadDelay 800000
       putStrLn $ formatMetadata meta pos status
+    players <- liftIO $ readIORef playerdata
+    whenJust (M.lookup cur players) $ \(Player { previousVolume = vol, previousStatus = cstatus }) -> do
+      liftIO $ writeIORef playerdata (delete cur players)
+      when (cstatus == Playing) $ do
+        --unfade cur vol
+        play cur
 
 main :: IO ()
 main = do
+  playerdata <- newIORef (M.empty :: PlayerData)
   let config = def {
-        playbackStatusHook = stopCurrentOnPlaybackStatusChange
+        playbackStatusHook = (stopCurrentOnPlaybackStatusChange playerdata)
                              <> playbackStatusHook def
-                             <> myPlaybackStatusHook
+                             <> (myPlaybackStatusHook playerdata)
         }
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
   mpris config $ do
     names <- gets players
     liftIO $ print names
-    forever loop
+    forever (loop playerdata)
