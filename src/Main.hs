@@ -54,22 +54,35 @@ stopCurrentOnPlaybackStatusChange playerdata = do
               writeIORef playerdata newp
               hPutStrLn stderr $ "stats: " ++ show newp
             when (cstatus == Playing) $ forkMpris $ do
-              -- fade c
+              fade c
               pause c
+
+restartPlayer :: IORef PlayerData -> Callback ()
+restartPlayer playerdata = do
+  bus <- bus
+  liftIO $ print $ "Bus quit. " ++ show bus
+  liftMpris $ do
+    whenJustM current $ \cur -> do
+      players <- liftIO $ readIORef playerdata
+      whenJust (M.lookup cur players) $ \(Player { previousVolume = vol, previousStatus = cstatus }) -> do
+        liftIO $ writeIORef playerdata (delete cur players)
+        when (cstatus == Playing) $ do
+          play cur
+          unfade cur vol
 
 fade :: BusName -> Mpris ()
 fade bus = whenJustM (volume bus) $ \cv -> do
   let vol = (takeWhile (>= 0) . iterate (flip (-) 0.05) $ cv) ++ [0]
   forM_ vol $ \v -> do
     setVolume bus v
-    liftIO $ threadDelay 80000
+    liftIO $ threadDelay 65000
 
 unfade :: BusName -> Double -> Mpris ()
 unfade bus target = whenJustM (volume bus) $ \cv -> do
   let vol = (takeWhile (<= target) . iterate ((+) 0.05) $ 0) ++ [target]
   forM_ vol $ \v -> do
     setVolume bus v
-    liftIO $ threadDelay 80000
+    liftIO $ threadDelay 65000
 
 loop :: IORef PlayerData -> Mpris ()
 loop playerdata = do
@@ -81,21 +94,15 @@ loop playerdata = do
     liftIO $ do
       threadDelay 800000
       putStrLn $ formatMetadata meta pos status
-    players <- liftIO $ readIORef playerdata
-    whenJust (M.lookup cur players) $ \(Player { previousVolume = vol, previousStatus = cstatus }) -> do
-      liftIO $ writeIORef playerdata (delete cur players)
-      when (cstatus == Playing) $ do
-        --unfade cur vol
-        play cur
 
 main :: IO ()
 main = do
   playerdata <- newIORef (M.empty :: PlayerData)
-  let config = def {
-        playbackStatusHook = (stopCurrentOnPlaybackStatusChange playerdata)
-                             <> playbackStatusHook def
-                             <> (myPlaybackStatusHook playerdata)
-        }
+  let config = def { playbackStatusHook = stopCurrentOnPlaybackStatusChange playerdata
+                                       <> playbackStatusHook def
+                                       <> myPlaybackStatusHook playerdata
+                   , playerQuitHook = playerQuitHook def <> restartPlayer playerdata
+                   }
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
   mpris config $ do
