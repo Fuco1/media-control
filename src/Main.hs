@@ -78,8 +78,8 @@ fade bus = whenJustM (volume bus) $ \cv -> do
     liftIO $ threadDelay 65000
 
 unfade :: BusName -> Double -> Mpris ()
-unfade bus target = whenJustM (volume bus) $ \cv -> do
-  let vol = (takeWhile (<= target) . iterate ((+) 0.05) $ 0) ++ [target]
+unfade bus target = do
+  let vol = (takeWhile (<= target) . iterate (0.05 +) $ 0) ++ [target]
   forM_ vol $ \v -> do
     setVolume bus v
     liftIO $ threadDelay 65000
