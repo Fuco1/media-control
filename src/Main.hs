@@ -61,14 +61,13 @@ restartPlayer :: IORef PlayerData -> Callback ()
 restartPlayer playerdata = do
   bus <- bus
   liftIO $ print $ "Bus quit. " ++ show bus
-  liftMpris $ do
-    whenJustM current $ \cur -> do
-      players <- liftIO $ readIORef playerdata
-      whenJust (M.lookup cur players) $ \(Player { previousVolume = vol, previousStatus = cstatus }) -> do
-        liftIO $ writeIORef playerdata (delete cur players)
-        when (cstatus == Playing) $ do
-          play cur
-          unfade cur vol
+  liftMpris $ whenJustM current $ \cur -> do
+    players <- liftIO $ readIORef playerdata
+    whenJust (M.lookup cur players) $ \(Player { previousVolume = vol, previousStatus = cstatus }) -> do
+      liftIO $ writeIORef playerdata (delete cur players)
+      when (cstatus == Playing) $ do
+        play cur
+        unfade cur vol
 
 fade :: BusName -> Mpris ()
 fade bus = whenJustM (volume bus) $ \cv -> do
