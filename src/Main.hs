@@ -44,7 +44,7 @@ stopCurrentOnPlaybackStatusChange playerdata = do
     pl <- gets players
     whenJustM current $ \c ->
       when (bstatus == Playing && notElem b pl) $ do
-        liftIO $ print $ "old current was " ++ show c
+        liftIO $ hPutStrLn stderr $ "old current was " ++ show c
         whenJustM (volume c) $ \vol ->
           whenJustM (playbackStatus c) $ \cstatus -> do
             liftIO $ do
@@ -60,7 +60,7 @@ stopCurrentOnPlaybackStatusChange playerdata = do
 restartPlayer :: IORef PlayerData -> Callback ()
 restartPlayer playerdata = do
   bus <- bus
-  liftIO $ print $ "Bus quit. " ++ show bus
+  liftIO $ hPutStrLn stderr $ "Bus quit. " ++ show bus
   liftMpris $ whenJustM current $ \cur -> do
     players <- liftIO $ readIORef playerdata
     whenJust (M.lookup cur players) $ \(Player { previousVolume = vol, previousStatus = cstatus }) -> do
