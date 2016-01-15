@@ -6,9 +6,9 @@ module Format
 
 import Data.Maybe (fromMaybe)
 import Data.List as L
-import qualified Data.Text as T
 import DBus.Mpris (Metadata(..), PlaybackStatus(..))
 import Text.Printf (printf)
+import Network.HTTP (urlDecode)
 
 formatMetadata :: Maybe Metadata -> Maybe Integer -> Maybe PlaybackStatus -> String
 formatMetadata (Just meta) (Just pos) (Just status) = name ++ playback ++ duration
@@ -38,5 +38,5 @@ formatDuration dur = (if h > 0 then show h ++ ":" else "") ++ printf "%02d:%02d"
 -- | Return file portion of URL if file:///, otherwise do nothing
 formatURL :: String -> String
 formatURL url = if "file:///" `isPrefixOf` url
-                 then T.unpack . T.replace "%20" " " . T.pack . reverse . takeWhile (/= '/') . reverse $ url
+                 then urlDecode . reverse . takeWhile (/= '/') . reverse $ url
                  else url
