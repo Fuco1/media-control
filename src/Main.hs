@@ -66,7 +66,10 @@ restartPlayer playerdata = do
     whenJust (M.lookup cur players) $ \(Player { previousVolume = vol, previousStatus = cstatus }) -> do
       liftIO $ writeIORef playerdata (delete cur players)
       when (cstatus == Playing) $ do
-        play cur
+         -- the player should be paused/stopped, so this should always
+         -- restart it.  We use pausePlay over play because stupid
+         -- spotify doesn't fully implement mpris.
+        playPause cur
         unfade cur vol
 
 fade :: BusName -> Mpris ()
