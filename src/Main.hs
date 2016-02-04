@@ -30,8 +30,8 @@ whenJust a f = maybe (return ()) f a
 whenJustM :: Monad m => m (Maybe a) -> (a -> m ()) -> m ()
 whenJustM a f = a >>= \v -> whenJust v f
 
-myPlaybackStatusHook :: IORef PlayerData -> Callback PlaybackStatus
-myPlaybackStatusHook playerdata = do
+myPlaybackStatusHook :: Callback PlaybackStatus
+myPlaybackStatusHook = do
   bus <- bus
   whenJustM value $ \s ->
     when (s == Playing) $
@@ -102,7 +102,7 @@ main = do
   playerdata <- newIORef (M.empty :: PlayerData)
   let config = def { playbackStatusHook = stopCurrentOnPlaybackStatusChange playerdata
                                        <> playbackStatusHook def
-                                       <> myPlaybackStatusHook playerdata
+                                       <> myPlaybackStatusHook
                    , playerQuitHook = playerQuitHook def <> restartPlayer playerdata
                    }
   hSetBuffering stdout LineBuffering
