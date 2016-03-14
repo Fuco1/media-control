@@ -8,7 +8,7 @@ import Control.Monad
 import Control.Monad.RWS (gets)
 import Control.Monad.Trans (liftIO)
 import DBus
-import DBus.Mpris
+import DBus.Mpris hiding (Player)
 import Data.Default
 import Data.IORef
 import Data.Map as M
