@@ -14,6 +14,7 @@ import Data.IORef
 import Data.Map as M
 import Data.Monoid ((<>))
 import System.IO
+import System.Process (callProcess)
 import Format (formatMetadata)
 
 data Player = Player { previousStatus :: PlaybackStatus
@@ -34,8 +35,10 @@ myPlaybackStatusHook :: Callback PlaybackStatus
 myPlaybackStatusHook = do
   bus <- bus
   whenJustM value $ \s ->
-    when (s == Playing) $
-      liftIO $ hPutStrLn stderr $ "Current bus is now " ++ show bus
+    when (s == Playing) $ liftIO $ do
+      -- notify xmonad via root property, but only on change
+      callProcess "xprop" ["-root", "-format", "MPRIS_CURRENT_ACTIVE_DBUS", "8s", "-set", "MPRIS_CURRENT_ACTIVE_DBUS", formatBusName bus]
+      hPutStrLn stderr $ "Current bus is now " ++ show bus
 
 stopCurrentOnPlaybackStatusChange :: IORef PlayerData -> Callback PlaybackStatus
 stopCurrentOnPlaybackStatusChange playerdata = do
