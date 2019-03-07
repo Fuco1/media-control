@@ -92,12 +92,12 @@ unfade bus target = do
 loop :: IORef PlayerData -> Mpris ()
 loop playerdata = do
   c <- current
+  liftIO $ threadDelay 800000
   whenJust c $ \cur -> do
     meta <- metadata cur
     pos <- position cur
     status <- playbackStatus cur
     liftIO $ do
-      threadDelay 800000
       putStrLn $ formatMetadata meta pos status
 
 main :: IO ()
